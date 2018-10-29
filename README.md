@@ -1,12 +1,12 @@
 # pommerman-2018
 
 ## 아나콘다 설치
-* [https://www.anaconda.com/download](아나콘다 다운로드)
+* [아나콘다 다운로드](https://www.anaconda.com/download)
 * macOS High Sierra (10.13.6)
 * Ananconda 1.6.2
 
 ## 파이썬 설치
-* [https://www.python.org/downloads/](파이썬 다운로드)
+* [파이썬 다운로드](https://www.python.org/downloads/)
 * Python 3.6.x
 
 ## 가상환경 구성
