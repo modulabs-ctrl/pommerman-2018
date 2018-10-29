@@ -27,7 +27,6 @@ class TensorForcePpoAgent(BaselineAgent):
 
     def act(self, obs, action_space):
         # print(obs)
-        print(self.xxx, self.env)
         """This agent has its own way of inducing actions. See train_with_tensorforce."""
         agent_state = self.xxx.featurize(obs)
         action = self.agent.act(agent_state)
