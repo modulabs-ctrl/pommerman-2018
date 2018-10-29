@@ -38,3 +38,18 @@ python setup.py install
 cd $HOME/git/pommerman-2018
 pip install -r requirements.txt
 ```
+
+## 학습 및 테스트
+```bash
+1) 학습
+python ctrl/cli/train_pommerman.py \
+--agents=tensorforce::ppo,test::agents.SimpleAgent,test::agents.SimpleAgent,test::agents.SimpleAgent \
+--num_of_episodes=1 \
+--max_timesteps=1000 \
+--config=PommeTeamCompetition-v0 \
+--render
+
+2) 실행
+python ctrl/cli/simple_ffa_run.py
+
+```
