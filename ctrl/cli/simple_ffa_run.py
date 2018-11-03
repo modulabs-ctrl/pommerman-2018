@@ -1,7 +1,11 @@
+import warnings
+warnings.filterwarnings("always")
+warnings.filterwarnings("ignore")
+
 '''An example to show how to set up an pommerman game programmatically'''
 import pommerman
 from pommerman import agents
-from ctrl import agents as ctrl
+from ctrl.agents import TensorForcePpoAgent
 
 def main():
     '''Simple function to bootstrap a game.
@@ -14,7 +18,7 @@ def main():
     # Create a set of agents (exactly four)
     agent_list = [
         # agents.SimpleAgent(),
-        ctrl.TensorForcePpoAgent(),
+        TensorForcePpoAgent(),
         agents.RandomAgent(),
         agents.SimpleAgent(),
         agents.RandomAgent(),
@@ -25,7 +29,7 @@ def main():
     env = pommerman.make('PommeFFACompetition-v0', agent_list)
 
     for agent in agent_list:
-        if type(agent) == ctrl.TensorForcePpoAgent:
+        if type(agent) == TensorForcePpoAgent:
             agent.initialize(env)
             break
 
@@ -37,9 +41,8 @@ def main():
             env.render()
             actions = env.act(state)
             state, reward, done, info = env.step(actions)
-        print('Episode {} finished'.format(i_episode))
+        print('Episode {} {} {} finished'.format(i_episode, reward, info))
     env.close()
-
 
 if __name__ == '__main__':
     main()

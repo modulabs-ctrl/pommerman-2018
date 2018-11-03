@@ -19,23 +19,31 @@ class TensorForcePpoAgent(BaselineAgent):
         self.agent = None
         self.state = {}
         self.env = None
-        self.xxx = "myenv"
-        print("TensorForcePpoAgent iniitialized.")
+        self.version = self.reload_version()
+        print("TensorForcePpoAgent {} iniitialized.".format(self.version))
 
+    def reload_version(self, filename='VERSION'):
+        version = None
+        for line in open(filename, 'r'):
+            version = line.strip().split('=')[1]
+            break
+        return version
+        
     def episode_end(self, reward):
-        print("i've got rewards {}".format(reward))
+        # print("i've got rewards {}".format(reward))
+        pass
 
     def act(self, obs, action_space):
         # print(obs)
         """This agent has its own way of inducing actions. See train_with_tensorforce."""
-        agent_state = self.xxx.featurize(obs)
+        agent_state = self.env.featurize(obs)
         action = self.agent.act(agent_state)
         return action
 
     def initialize(self, env):
         from gym import spaces
         from tensorforce.agents import PPOAgent
-        self.xxx = env
+        self.env = env
 
         if self.algorithm == "ppo":
             if type(env.action_space) == spaces.Tuple:
