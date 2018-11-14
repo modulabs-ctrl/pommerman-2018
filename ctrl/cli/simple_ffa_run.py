@@ -19,9 +19,9 @@ def main():
     agent_list = [
         # agents.SimpleAgent(),
         TensorForcePpoAgent(),
-        agents.RandomAgent(),
         agents.SimpleAgent(),
-        agents.RandomAgent(),
+        agents.SimpleAgent(),
+        agents.SimpleAgent(),
         # agents.DockerAgent("pommerman/simple-agent", port=12345),
     ]
 

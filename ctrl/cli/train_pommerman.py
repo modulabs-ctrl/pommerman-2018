@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import warnings
 warnings.filterwarnings("always")
 warnings.filterwarnings("ignore")
@@ -32,6 +33,40 @@ from ctrl.agents import TensorForcePpoAgent
 
 CLIENT = docker.from_env()
 
+DEFAULT_REWARDS = [ 
+    1.01, # 0. 승리
+   -1.01, # 1. 패배
+    0.01, # 2. 무승부
+   -0.01, # 3. 아무 행동도 하지 않으면 타임 스텝마다
+    0.01, # 4. 폭탄을 설치하면 해당 타임스텝
+    0.01, # 5. 계속 움직이면 해당 타임스텝
+    0.01, # 6. 아이템 (폭탄범위) 최초로 먹으면
+    0.01, # 7. 아이템 (킥) 최초로 먹으면
+    0.01  # 8. 아이템 (탄창) 최초로 먹으면
+]
+RES_WIN = 0
+RES_LOSE = 1
+RES_DRAW = 2
+ACT_SLEEP = 3
+ACT_BOMB = 4
+ACT_OTHER = 5
+ITEM_BLAST = 6
+ITEM_KICK = 7
+ITEM_AMMO = 8
+
+STR_WINNER='Winner' # :thumbs_up_light_skin_tone:'
+STR_LOSER='Loser' # :thumbs_down_light_skin_tone:'
+STR_SLEEP='Sleep'
+STR_STAY='Stay'
+STR_UP='Up'
+STR_LEFT='Left'
+STR_DOWN='Down'
+STR_RIGHT='Right'
+STR_BOMBSET='BombSet' # :bomb:'
+STR_BLAST='ItemBlast' # :cookie:'
+STR_KICK='ItemKick' # :egg:'
+STR_AMMO='ItemAmmo' # :rice:'
+
 def clean_up_agents(agents):
     """Stops all agents"""
     return [agent.shutdown() for agent in agents]
@@ -42,8 +77,6 @@ class WrappedEnv(OpenAIGym):
     def __init__(self, gym, visualize=False):
         self.gym = gym
         self.visualize = visualize
-        self.prev_action = None
-        self.curr_action = None
         self.old_position = None
         self.prev_position = None
         self.curr_position = None
@@ -52,48 +85,85 @@ class WrappedEnv(OpenAIGym):
         self.has_blast_strength = False
         self.has_can_kick = False
         self.has_ammo = False
-        print(f'Episode[{self.episode:03}], Timestep[{self.timestep:03}] initialized.')
+        self.tmp_reward = 0.0
+        self.res_reward = 0.0
+        self.accu_bombset = 1.0
+        self.act_history = []
+        self.render = False
+        self.rewards = DEFAULT_REWARDS
+        print(f'Episode [{self.episode:03}], Timestep [{self.timestep:03}] initialized.')
+
+    def set_render(self, render):
+        self.render = render
+
+    def set_rewards(self, custom_rewards):
+        self.rewards = [ float(reward.strip()) for reward in custom_rewards.split(',') ]
+        print(self.rewards)
     
-    rule_of_thumb = """
-        1. 승리하면 +300
-        2. 패배하면 -150
-        3. 아무 행동도 하지 않으면 타임 스텝마다 -0.2
-        4. 어떤 행동이라도 하면 타임스텝마다 +0.1
-         (구석에서 짱박혀서 움직이는 척 하기 있기 없기)
-        5. 어떤 행동 중에서 폭탄은 +10
-        6. 어떤 아이템이라도 먹으면 +20
-    """
     def shaping_reward(self, agent_id, agent_obs, agent_reward, agent_action):
+        import emoji
         import numpy as np
         self.timestep += 1
         self.agent_board = agent_obs['board']
         self.curr_position = np.where(self.agent_board == agent_id)
+        self.tmp_reward = 0.0
+        actions = []
 
-        modified_reward = agent_reward
         if agent_reward == 1:
-            modified_reward += 300
+            actions.append(emoji.emojize(STR_WINNER))
+            self.tmp_reward += self.rewards[RES_WIN]
         if agent_reward == -1:
-            modified_reward -= 150
+            actions.append(emoji.emojize(STR_LOSER))
+            self.tmp_reward += self.rewards[RES_LOSE]
+        if agent_reward == 0:
+            # actions.append("Draw")
+            self.tmp_reward += self.rewards[RES_DRAW]
+
         if self.prev_position != None and self.prev_position == self.curr_position and self.old_position == self.prev_position:
-            modified_reward -= 0.2
-        if self.prev_position != None and self.prev_position != self.curr_position and self.old_position == self.prev_position:
-            modified_reward += 0.1
-        if self.curr_action == 5:
-            modified_reward += 10
+            actions.append(emoji.emojize(STR_SLEEP))
+            self.tmp_reward += self.rewards[ACT_SLEEP]
+        elif agent_action == 0:
+            actions.append(emoji.emojize(STR_STAY))
+            self.tmp_reward += self.rewards[ACT_OTHER]
+        elif agent_action == 1:
+            actions.append(emoji.emojize(STR_UP))
+            self.tmp_reward += self.rewards[ACT_OTHER]
+        elif agent_action == 2:
+            actions.append(emoji.emojize(STR_LEFT))
+            self.tmp_reward += self.rewards[ACT_OTHER]
+        elif agent_action == 3:
+            actions.append(emoji.emojize(STR_DOWN))
+            self.tmp_reward += self.rewards[ACT_OTHER]
+        elif agent_action == 4:
+            actions.append(emoji.emojize(STR_RIGHT))
+            self.tmp_reward += self.rewards[ACT_OTHER]
+        elif agent_action == 5:
+            actions.append(emoji.emojize(STR_BOMBSET))
+            self.tmp_reward += self.rewards[ACT_BOMB] * self.accu_bombset
+            self.accu_bombset += 0.2
+
         if not self.has_blast_strength and int(agent_obs['blast_strength']) > 2:
-            modified_reward += 20
+            actions.append(emoji.emojize(STR_BLAST))
+            self.tmp_reward += self.rewards[ITEM_BLAST]
             self.has_blast_strength = True
         if not self.has_can_kick and agent_obs['can_kick'] == True:
-            modified_reward += 20
+            actions.append(emoji.emojize(STR_KICK))
+            self.tmp_reward += self.rewards[ITEM_KICK]
             self.has_can_kick = True
         if not self.has_ammo and int(agent_obs['ammo']) > 1:
-            modified_reward += 20
+            actions.append(emoji.emojize(STR_AMMO))
+            self.tmp_reward += self.rewards[ITEM_AMMO]
             self.has_ammo = True
 
-        print(f'Episode[{self.episode:03}], Timestep[{self.timestep:03}] got reward {modified_reward}')
+        self.res_reward += self.tmp_reward
+        self.act_history += actions
+        # 렌더링 하는 경우에만 자세한 리워드를 출력한다.
+        if self.render:
+            print(f'Episode [{self.episode:03}], Timestep [{self.timestep:03}] got reward {round(self.res_reward, 2)} [{actions}]')
+
         self.old_position = self.prev_position
         self.prev_position = self.curr_position
-        return modified_reward
+        return self.tmp_reward
 
     def execute(self, action):
         if self.visualize:
@@ -115,11 +185,22 @@ class WrappedEnv(OpenAIGym):
 
     '''Reset method is called when every episode starts'''
     def reset(self):
-        print(f'Episode[{self.episode:03}], Timestep[{self.timestep:03}] ended.\n')
+        hist = self.act_history
+        item_count = hist.count(STR_AMMO) + hist.count(STR_BLAST) + hist.count(STR_KICK)
+        bomb_count = hist.count(STR_BOMBSET)
+        move_count = hist.count(STR_UP) + hist.count(STR_DOWN) + hist.count(STR_LEFT) + hist.count(STR_RIGHT)
+        stop_count = hist.count(STR_SLEEP) + hist.count(STR_STAY)
+        history = "BombSet({}), ItemGot({}), Move({}), Stay({})".format(bomb_count, item_count, move_count, stop_count)
+
+        print(f'Episode [{self.episode:03}], Timestep [{self.timestep:03}] reward {round(self.res_reward,2)} history {history}.')
         obs = self.gym.reset()
         agent_obs = self.gym.featurize(obs[3])
         self.timestep = 0
         self.episode += 1
+        self.tmp_reward = 0.0
+        self.res_reward = 0.0
+        self.accu_bombset = 1.0
+        self.act_history = []
         self.has_blast_strength = False
         self.has_can_kick = False
         self.has_ammo = False
@@ -189,6 +270,11 @@ def main():
         default="2000",
         help="Number of steps"
     )
+    parser.add_argument(
+        "--rewards",
+        default=DEFAULT_REWARDS,
+        help="Shaping of rewards"
+    )
     args = parser.parse_args()
 
     config = args.config
@@ -199,6 +285,7 @@ def main():
     checkpoint = args.checkpoint
     num_of_episodes = int(args.num_of_episodes)
     max_timesteps = int(args.max_timesteps)
+    custom_rewards = args.rewards
 
     # TODO: After https://github.com/MultiAgentLearning/playground/pull/40
     #       this is still missing the docker_env_dict parsing for the agents.
@@ -227,19 +314,27 @@ def main():
         assert not os.path.isdir(args.record_json_dir)
         os.makedirs(args.record_json_dir)
 
-    # Create a Proximal Policy Optimization agent
-    agent = training_agent.initialize(env)
+    learning_agent = training_agent.initialize(env)
+    for agent in agents:
+        if type(agent) == TensorForcePpoAgent:
+            if agent.agent_id == training_agent_id:
+                learning_agent = training_agent.initialize(env)
+            else:
+                agent.initialize(env)
 
     atexit.register(functools.partial(clean_up_agents, agents))
     wrapped_env = WrappedEnv(env, visualize=args.render)
-    runner = Runner(agent=agent, environment=wrapped_env)
+    wrapped_env.set_render(args.render)
+    wrapped_env.set_rewards(custom_rewards)
+
+    runner = Runner(agent=learning_agent, environment=wrapped_env)
     runner.run(episodes=num_of_episodes, max_episode_timesteps=max_timesteps)
     print("Stats: ",
         runner.episode_rewards[-30:],
         runner.episode_timesteps,
         runner.episode_times)
 
-    agent.save_model(checkpoint)
+    learning_agent.save_model(checkpoint)
 
     rewards = runner.episode_rewards
     import numpy as np

@@ -159,4 +159,5 @@ pip-selfcheck.json
 
 ### Custom models
 models/*
-
+models.*.*/
+board/

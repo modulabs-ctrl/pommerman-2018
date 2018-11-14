@@ -34,9 +34,10 @@ class TensorForcePpoAgent(BaselineAgent):
         pass
 
     def act(self, obs, action_space):
-        # print(obs)
         """This agent has its own way of inducing actions. See train_with_tensorforce."""
+        print("obs '{}'".format(obs))
         agent_state = self.env.featurize(obs)
+        print("featureize '{}'".format(agent_state))
         action = self.agent.act(agent_state)
         return action
 
@@ -44,6 +45,32 @@ class TensorForcePpoAgent(BaselineAgent):
         from gym import spaces
         from tensorforce.agents import PPOAgent
         self.env = env
+
+        # activation function 이 없으므로 depth 가 깊어지면 decay 문제.
+        network_spec = [
+            dict(type='dense', size=64),
+            dict(type='dense', size=64)
+        ]
+
+        summarizer = dict(
+            directory="board",
+            steps=50,
+            labels=[
+                "graph", 
+                "losses",
+                "total-loss",
+                "variables",
+                "inputs",
+                "states",
+                "actions",
+                "rewards",
+                "gradients",
+                "gradients_histogram",
+                "gradients_scalar",
+                "regularization"
+                # "configuration"
+            ]
+        )
 
         if self.algorithm == "ppo":
             if type(env.action_space) == spaces.Tuple:
@@ -60,12 +87,60 @@ class TensorForcePpoAgent(BaselineAgent):
             self.agent = PPOAgent(
                 states=dict(type='float', shape=env.observation_space.shape),
                 actions=actions,
-                network=[
-                    dict(type='dense', size=64),
-                    dict(type='dense', size=64)
-                ],
-                batching_capacity=1000,
-                step_optimizer=dict(type='adam', learning_rate=1e-4))
+                network=network_spec,
+                summarizer=summarizer,
+                # Agent
+                states_preprocessing=None,
+                actions_exploration=None,
+                reward_preprocessing=None,
+                # MemoryModel
+                update_mode=dict(
+                    unit='episodes',
+                    # 100 episodes per update
+                    batch_size=100,
+                    # Every 10 episodes
+                    frequency=10
+                ),
+                memory=dict(
+                    type='latest',
+                    include_next_states=False,
+                    capacity=5000
+                ),
+                # DistributionModel
+                distributions=None,
+                entropy_regularization=0.01,
+                # PGModel
+                baseline_mode='states',
+                baseline=dict(
+                    type='mlp',
+                    sizes=[64, 64]
+                ),
+                baseline_optimizer=dict(
+                    type='multi_step',
+                    optimizer=dict(
+                        type='adam',
+                        learning_rate=1e-3
+                    ),
+                    num_steps=5
+                ),
+                gae_lambda=0.97,
+                # PGLRModel
+                likelihood_ratio_clipping=0.2,
+                # PPOAgent
+                step_optimizer=dict(
+                    type='adam',
+                    learning_rate=1e-3
+                ),
+                subsampling_fraction=0.2,
+                optimization_steps=25,
+                execution=dict(
+                    type='single',
+                    session_config=None,
+                    distributed_spec=None
+                )
+            )
+                # batching_capacity=1000,
+                # step_optimizer=dict(type='adam', learning_rate=1e-4))
 
             self.restore_model_if_exists(self.checkpoint)
 
