@@ -1,24 +1,34 @@
 
-# Random Network Distillation
+# Reinforcement Learning with Prediction-Based Rewards
 
 [Reinforcement Learning with Prediction-Based Rewards](https://blog.openai.com/reinforcement-learning-with-prediction-based-rewards)
 
 ## Summary of Article
-* Explore their environments through curiosity
+* Random Network Distillation (RND), a prediction-based method for encouraging reinforcement learning agents to explore their environments through curiosity
+* RND incentivizes visiting unfamiliar states by measuring how hard it is to predict the output of a fixed random neural network on visited states.
+
+## Progress in Montezuma’s Revenge
 * For an agent to achieve a desired goal it must first explore what is possible in its environment and what constitutes progress towards the goal.
 * Simple exploration strategies are highly unlikely to gather any rewards, or see more than a few of the 24 rooms in the level.
 
-### Why Exploration is Difficult
-* many of the more complicated games require long sequences of very specific actions to experience any reward, and such sequences are extremely unlikely to occur randomly.
+## [Large-Scale Study of Curiosity-Driven Learning](https://pathak22.github.io/large-scale-curiosity/)
+* Prior to developing RND, we investigated learning *without any environment-specific rewards.*
+* Curiosity gives us an easier way to teach agents to interact with any environment, rather than via an extensively engineered task-specific reward function that we hope corresponds to solving a task.
+* There, the agent learns a next-state predictor model from its experience, and uses the error of the prediction as an intrinsic reward.
 
-### Simplifying Exploration with Demonstrations
-* Our approach works by letting each RL episode start from a state in a previously recorded demonstration.
-* Once the agent is able to beat or at least tie the score of the demonstrator on the remaining part of the game in at least 20% of the rollouts, we slowly move the starting point back in time.
-* We keep doing this until the agent is playing from the start of the game, without using the demo at all, at which point we have an RL-trained agent beating or tying the human expert on the entire game.
+## What Do Curious Agents Do?
+* To our surprise, in some environments the agent achieved the game’s objective even though the game’s objective was not communicated to it through an extrinsic reward.
 
-### Comparison to imitation-based approaches
+## The Noisy-TV Problem
+* the agent sometimes gets trapped by its curiosity as the result of the noisy-TV problem.
+* The agent finds a source of randomness in the environment and keeps observing it, always experiencing a high intrinsic reward for such transitions.
 
-* our method will thus not overfit to a potentially sub-optimal demonstration and could offer benefits in multi-player games where we want to optimize performance against other opponents than just the one from the demonstration.
+## Random Network Distillation
+* 이후-상태 예측은 noisy-TV 문제에 대해서 본질적으로 민감할 수 밖에 없기 때문에, 아래와 같은 예측 오류들을 확인할 수 있었습니다.
+* 사실 1: 난이도가 높은 상황을 일반화 하지 못해 제대로 학습하지 못한 경우
+* 사실 2: 학습해야 할 상황이 deterministic 하지 않아 학습이 어렵다
+* 사실 3: 예측에 필요한 정보가 부족하거나, 너무 복잡한 경우라 학습이 어렵다
+> 1번의 경우 극복해야 할 문제이므로 패스하고, 2~3번의 개선을 위해, 주어진 다음 상태에 대해 다음 상태를 위한 고정된 랜덤 초기화 뉴럴넷에 근거한 새로운 탐험인 RND 방법을 연구했습니다.
 
 
 ### References
