@@ -39,9 +39,11 @@ from torch.utils.data import DataLoader
 
 SEED = 5
 BATCH_SIZE = 255
-LR = 0.01  # 0.0001
-EPS = 1e-5
+LR = 0.0001
+LE = 1e-5
 SIZE = 372
+EPS = np.finfo(np.float).eps
+INTRINSIC_CLIP=0.0001
 
 # set device
 use_cuda = torch.cuda.is_available()
@@ -125,7 +127,7 @@ class WrappedEnv(OpenAIGym):
         self.std = 0.0
         self.pred_net = PredictNet(self.obs_space).to(device)
         self.rand_net = RandomNet(self.obs_space).to(device)
-        self.pred_optim = torch.optim.Adam(self.pred_net.parameters(), lr=LR, eps=EPS)
+        self.pred_optim = torch.optim.Adam(self.pred_net.parameters(), lr=LR, eps=LE)
 
     def set_render(self, render):
         self.render = render
@@ -140,7 +142,7 @@ class WrappedEnv(OpenAIGym):
     def reset_replay_memory(self):
         self.rep_memory = deque(maxlen=self.max_timesteps)
         
-    def get_norm_params(self, obs_memory):
+    def get_norm_params_old(self, obs_memory):
         obses = [[] for _ in range(self.obs_space)]
         for obs in obs_memory:
             for j in range(self.obs_space):
@@ -154,13 +156,31 @@ class WrappedEnv(OpenAIGym):
         print("get_norm_params : {}, {}".format(mean, std))
         return mean, std
 
+    def get_norm_params(self, obs_memory):
+        global obs_apace
+
+        obses = [[] for _ in range(self.obs_space)]
+        for obs in obs_memory:
+            for j in range(self.obs_space):
+                obses[j].append(obs[j])
+
+        mean = np.zeros(self.obs_space, 'float')
+        std = np.zeros(self.obs_space, 'float')
+        for i, obs_ in enumerate(obses):
+            mean[i] = np.mean(obs_)
+            std[i] = np.std(obs_)
+        obs_memory.clear()
+        std = np.clip(std, a_min=EPS, a_max=None)
+        print("mean:'{}', std:'{}'".format(mean, std))
+        return mean, std
+
     def normalize_obs(self, label, obs, mean, std):
         means = [mean for _ in range(BATCH_SIZE)]
         stds = [std for _ in range(BATCH_SIZE)]
         mean = np.stack(means)
         std = np.stack(stds)
         norm_obs = (obs - mean) / std
-        return np.clip(norm_obs, -5, 5)
+        return np.clip(norm_obs, -1, 1)
 
     def calculate_reward_in(self, pred_net, rand_net, obs):
         norm_obs = self.normalize_obs("calculate", obs, self.mean, self.std)
@@ -169,7 +189,7 @@ class WrappedEnv(OpenAIGym):
             pred_obs = pred_net(state)
             rand_obs = rand_net(state)
             reward = (pred_obs - rand_obs).pow(2).sum()
-            clipped_reward = torch.clamp(reward, -1, 1)
+            clipped_reward = torch.clamp(reward, -1.0 * INTRINSIC_CLIP, 1.0 * INTRINSIC_CLIP)
         return clipped_reward.item()
 
     def execute(self, action):
@@ -197,12 +217,12 @@ class WrappedEnv(OpenAIGym):
             intrinsic_reward = self.calculate_reward_in(self.pred_net, self.rand_net, agent_state)
             if np.isnan(intrinsic_reward):
                 intrinsic_reward = 0.0
-            else:
-                print("##### intrinsic_reward {} #####".format(intrinsic_reward))
+            # else:
+            #     print("##### intrinsic_reward {} #####".format(intrinsic_reward))
         self.timestep += 1
         self.rep_memory.append(agent_state)
         agent_reward = extrinsic_reward + intrinsic_reward
-        if self.timestep % 10 == 0:
+        if self.timestep % 100 == 0:
             print("ts[{}/{}]: ext:'{}' + int:'{}' = rew:'{}'".format(self.timestep, self.global_ts, extrinsic_reward, intrinsic_reward, agent_reward))
 
         self.res_reward += agent_reward

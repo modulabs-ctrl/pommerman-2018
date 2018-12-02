@@ -26,7 +26,7 @@ def main():
     ]
 
     # Make the "Free-For-All" environment using the agent list
-    env = pommerman.make('PommeFFACompetition-v0', agent_list)
+    env = pommerman.make('PommeFFAFast-v0', agent_list)
 
     for agent in agent_list:
         if type(agent) == TensorForcePpoAgent:
